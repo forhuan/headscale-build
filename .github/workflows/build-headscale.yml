@@ -1,0 +1,45 @@
+name: Build Headscale
+
+on: 
+  release:
+    types: [published]
+  push:
+    tags:
+    - 'v*'
+  #  branches: 
+  #    - master
+#  schedule:
+#    - cron: 0 8 * * 5
+  watch:
+    types: [started]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: github.event.repository.owner.id == github.event.sender.id
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@master
+        
+    - name: Clone source code
+      run: |
+        git clone --depth=1 https://github.com/juanfont/headscale.git /opt/headscale
+        sed '/router.PathPrefix("\/").HandlerFunc(stdoutHandler)/i  \        router.PathPrefix("\/web\/").Handler(http.StripPrefix("\/web\/", http.FileServer(http.Dir("web"))))' -i /opt/headscale/app.go
+        
+    - uses: cachix/install-nix-action@v16    
+    
+    - name: Run build
+      run: |
+        cd /opt/headscale
+        # nix build
+        nix develop --command -- goreleaser release --rm-dist --snapshot
+        ls -R dist/
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: headscale-dist
+        path: /opt/headscale/dist
+        
